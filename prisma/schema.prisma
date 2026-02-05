@@ -1,0 +1,565 @@
+// SE AI Database Schema
+// Prisma ORM with PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== AUTHENTICATION ====================
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  emailVerified     DateTime?
+  name              String?
+  username          String?   @unique
+  image             String?
+  password          String?   // Hash bcrypt (null for OAuth)
+
+  // Profile
+  bio               String?
+  location          String?
+  website           String?
+  company           String?
+  birthdate         DateTime?
+
+  // Status
+  status            UserStatus @default(ACTIVE)
+  role              UserRole   @default(USER)
+
+  // Settings & Preferences (JSON)
+  settings          Json       @default("{}")
+  preferences       Json       @default("{}")
+
+  // Timestamps
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  lastLoginAt       DateTime?
+  lastActiveAt      DateTime?
+
+  // MFA
+  mfaEnabled        Boolean    @default(false)
+  mfaSecret         String?
+  backupCodes       String[]   @default([])
+
+  // OAuth IDs for quick lookup
+  githubId          String?    @unique
+  googleId          String?    @unique
+
+  // Onboarding
+  onboardingComplete Boolean   @default(false)
+  interests         String[]   @default([])
+  experienceLevel   String?
+
+  // Gamification
+  xp                Int        @default(0)
+  level             Int        @default(1)
+  streak            Int        @default(0)
+  lastStreakDate    DateTime?
+
+  // Relations
+  accounts          Account[]
+  sessions          Session[]
+  chats             Chat[]
+  messages          Message[]
+  projects          Project[]
+  subscription      Subscription?
+  apiKeys           ApiKey[]
+  notifications     Notification[]
+  loginHistory      LoginHistory[]
+  achievements      UserAchievement[]
+  styles            UserStyle[]
+
+  @@index([email])
+  @@index([username])
+  @@index([githubId])
+  @@index([googleId])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  // Extra provider data
+  providerData      Json?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  // Device info
+  userAgent    String?
+  ip           String?
+  country      String?
+  city         String?
+  device       String?  // 'desktop', 'mobile', 'tablet'
+  browser      String?
+  os           String?
+
+  createdAt    DateTime @default(now())
+  lastUsedAt   DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model LoginHistory {
+  id        String   @id @default(cuid())
+  userId    String
+
+  success   Boolean
+  method    String   // 'credentials', 'google', 'github', etc.
+  ip        String?
+  userAgent String?
+  country   String?
+  city      String?
+
+  error     String?
+
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  type       String   // 'email', 'password-reset', 'magic-link'
+
+  @@unique([identifier, token])
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  BANNED
+  PENDING_VERIFICATION
+}
+
+enum UserRole {
+  USER
+  PRO
+  ENTERPRISE
+  ADMIN
+  SUPER_ADMIN
+}
+
+// ==================== CHAT & MESSAGES ====================
+
+model Chat {
+  id          String    @id @default(cuid())
+  userId      String
+  title       String?
+  summary     String?
+
+  // Settings
+  model       String    @default("gpt-4o")
+  style       String?
+  temperature Float     @default(0.7)
+
+  // Metadata
+  tokenCount  Int       @default(0)
+  messageCount Int      @default(0)
+
+  // Sharing
+  isShared    Boolean   @default(false)
+  shareId     String?   @unique
+  sharedAt    DateTime?
+
+  // Organization
+  projectId   String?
+  isPinned    Boolean   @default(false)
+  isArchived  Boolean   @default(false)
+
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project     Project?  @relation(fields: [projectId], references: [id])
+  messages    Message[]
+  branches    ChatBranch[]
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([shareId])
+  @@index([createdAt])
+}
+
+model Message {
+  id          String      @id @default(cuid())
+  chatId      String
+  userId      String?
+
+  role        MessageRole
+  content     String      @db.Text
+
+  // AI metadata
+  model       String?
+  tokens      Int?
+  cost        Float?
+
+  // Attachments
+  attachments Json?       // Array of attachment objects
+
+  // Branch support
+  branchId    String?
+  parentId    String?
+
+  // Metadata
+  metadata    Json?
+
+  // Timestamps
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  chat        Chat        @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user        User?       @relation(fields: [userId], references: [id])
+  branch      ChatBranch? @relation(fields: [branchId], references: [id])
+
+  @@index([chatId])
+  @@index([userId])
+  @@index([branchId])
+  @@index([createdAt])
+}
+
+model ChatBranch {
+  id          String    @id @default(cuid())
+  chatId      String
+  name        String?
+  description String?
+
+  // Starting point
+  startMessageId String?
+
+  createdAt   DateTime  @default(now())
+
+  chat        Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  messages    Message[]
+
+  @@index([chatId])
+}
+
+enum MessageRole {
+  user
+  assistant
+  system
+  tool
+}
+
+// ==================== PROJECTS ====================
+
+model Project {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  icon        String?
+  color       String?
+
+  // Settings
+  settings    Json     @default("{}")
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chats       Chat[]
+
+  @@index([userId])
+}
+
+// ==================== STYLES ====================
+
+model Style {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  prompt      String   @db.Text
+  icon        String?
+
+  // Visibility
+  isPublic    Boolean  @default(false)
+  isPremium   Boolean  @default(false)
+
+  // Stats
+  usageCount  Int      @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       UserStyle[]
+
+  @@index([slug])
+}
+
+model UserStyle {
+  id        String   @id @default(cuid())
+  userId    String
+  styleId   String
+
+  // Custom overrides
+  customName String?
+  customPrompt String? @db.Text
+
+  // Usage
+  usageCount Int      @default(0)
+  lastUsedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  style     Style    @relation(fields: [styleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, styleId])
+  @@index([userId])
+}
+
+// ==================== SUBSCRIPTIONS & PAYMENTS ====================
+
+model Subscription {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+
+  // Plan info
+  plan            PlanType @default(FREE)
+  status          SubscriptionStatus @default(ACTIVE)
+
+  // Billing
+  billingCycle    BillingCycle @default(MONTHLY)
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+
+  // Provider info
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  mercadoPagoId        String?
+
+  // Usage limits (reset each period)
+  messagesUsed    Int      @default(0)
+  tokensUsed      Int      @default(0)
+  imagesGenerated Int      @default(0)
+
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  cancelledAt     DateTime?
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  payments        Payment[]
+
+  @@index([stripeCustomerId])
+}
+
+model Payment {
+  id              String   @id @default(cuid())
+  subscriptionId  String
+
+  amount          Float
+  currency        String   @default("BRL")
+  status          PaymentStatus
+  method          PaymentMethod
+
+  // Provider info
+  stripePaymentId String?
+  mercadoPagoId   String?
+  pixCode         String?
+
+  // Metadata
+  metadata        Json?
+
+  createdAt       DateTime @default(now())
+  paidAt          DateTime?
+
+  subscription    Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@index([subscriptionId])
+}
+
+enum PlanType {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+  TRIALING
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CREDIT_CARD
+  PIX
+  GOOGLE_PAY
+  APPLE_PAY
+}
+
+// ==================== API KEYS ====================
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  userId      String
+
+  name        String
+  key         String   @unique
+  keyPrefix   String   // First 8 chars for display
+
+  // Permissions
+  permissions String[] @default([])
+
+  // Rate limiting
+  rateLimit   Int      @default(100)
+
+  // Usage
+  usageCount  Int      @default(0)
+  lastUsedAt  DateTime?
+
+  // Status
+  isActive    Boolean  @default(true)
+  expiresAt   DateTime?
+
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([key])
+}
+
+// ==================== NOTIFICATIONS ====================
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+
+  type        NotificationType
+  title       String
+  message     String
+
+  // Action
+  actionUrl   String?
+  actionLabel String?
+
+  // Status
+  isRead      Boolean  @default(false)
+  readAt      DateTime?
+
+  // Metadata
+  metadata    Json?
+
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+enum NotificationType {
+  SYSTEM
+  FEATURE
+  SECURITY
+  USAGE
+  SUBSCRIPTION
+  ACHIEVEMENT
+  SOCIAL
+}
+
+// ==================== ACHIEVEMENTS ====================
+
+model Achievement {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String
+  icon        String
+
+  // Requirements
+  requirement Json     // e.g., { "type": "streak", "value": 7 }
+
+  // Rewards
+  xpReward    Int      @default(0)
+
+  // Rarity
+  rarity      AchievementRarity @default(COMMON)
+
+  createdAt   DateTime @default(now())
+
+  users       UserAchievement[]
+
+  @@index([slug])
+}
+
+model UserAchievement {
+  id            String   @id @default(cuid())
+  userId        String
+  achievementId String
+
+  unlockedAt    DateTime @default(now())
+
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement   Achievement @relation(fields: [achievementId], references: [id])
+
+  @@unique([userId, achievementId])
+  @@index([userId])
+}
+
+enum AchievementRarity {
+  COMMON
+  UNCOMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
