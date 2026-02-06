@@ -113,8 +113,12 @@ export async function* stream(options: AIRequestOptions): AsyncGenerator<StreamC
     const response: any = await getClient().chat.completions.create(params);
     const toolCallBuffers: Record<number, { id: string; name: string; args: string }> = {};
 
+    let emittedDone = false;
+
     for await (const chunk of response) {
-      const delta = (chunk as any).choices[0]?.delta;
+      const c = chunk as any;
+      const delta = c.choices?.[0]?.delta;
+      const finishReason = c.choices?.[0]?.finish_reason;
 
       if (delta?.content) {
         yield { type: 'text', content: delta.content };
@@ -131,7 +135,9 @@ export async function* stream(options: AIRequestOptions): AsyncGenerator<StreamC
         }
       }
 
-      if (chunk.x_groq?.usage) {
+      // Emit tool calls when finish_reason signals completion or x_groq usage arrives
+      if (finishReason === 'tool_calls' || finishReason === 'stop' || c.x_groq?.usage) {
+        // Emit buffered tool calls
         for (const buf of Object.values(toolCallBuffers)) {
           yield {
             type: 'tool_call',
@@ -142,16 +148,28 @@ export async function* stream(options: AIRequestOptions): AsyncGenerator<StreamC
             },
           };
         }
+        // Clear after emitting
+        for (const key of Object.keys(toolCallBuffers)) {
+          delete toolCallBuffers[Number(key)];
+        }
+      }
 
+      if (c.x_groq?.usage && !emittedDone) {
+        emittedDone = true;
         yield {
           type: 'done',
           usage: {
-            promptTokens: chunk.x_groq.usage.prompt_tokens,
-            completionTokens: chunk.x_groq.usage.completion_tokens,
-            totalTokens: chunk.x_groq.usage.total_tokens,
+            promptTokens: c.x_groq.usage.prompt_tokens,
+            completionTokens: c.x_groq.usage.completion_tokens,
+            totalTokens: c.x_groq.usage.total_tokens,
           },
         };
       }
+    }
+
+    // Fallback: if x_groq.usage never arrived, emit done without usage
+    if (!emittedDone) {
+      yield { type: 'done' };
     }
   } catch (error: unknown) {
     const err = error as { message?: string };

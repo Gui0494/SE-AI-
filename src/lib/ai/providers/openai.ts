@@ -122,8 +122,11 @@ export async function* stream(options: AIRequestOptions): AsyncGenerator<StreamC
     const response = await getClient().chat.completions.create(params);
     const toolCallBuffers: Record<number, { id: string; name: string; args: string }> = {};
 
+    let toolCallsEmitted = false;
+
     for await (const chunk of response) {
       const delta = chunk.choices[0]?.delta;
+      const finishReason = chunk.choices[0]?.finish_reason;
 
       if (delta?.content) {
         yield { type: 'text', content: delta.content };
@@ -140,8 +143,9 @@ export async function* stream(options: AIRequestOptions): AsyncGenerator<StreamC
         }
       }
 
-      if (chunk.usage) {
-        // Emit tool calls before done
+      // Emit tool calls when finish_reason arrives (before the usage chunk)
+      if (finishReason && !toolCallsEmitted && Object.keys(toolCallBuffers).length > 0) {
+        toolCallsEmitted = true;
         for (const buf of Object.values(toolCallBuffers)) {
           yield {
             type: 'tool_call',
@@ -151,6 +155,23 @@ export async function* stream(options: AIRequestOptions): AsyncGenerator<StreamC
               function: { name: buf.name, arguments: buf.args },
             },
           };
+        }
+      }
+
+      // Usage chunk comes last — emit done
+      if (chunk.usage) {
+        // Safety: emit tool calls if finish_reason was missed
+        if (!toolCallsEmitted && Object.keys(toolCallBuffers).length > 0) {
+          for (const buf of Object.values(toolCallBuffers)) {
+            yield {
+              type: 'tool_call',
+              toolCall: {
+                id: buf.id,
+                type: 'function',
+                function: { name: buf.name, arguments: buf.args },
+              },
+            };
+          }
         }
 
         yield {

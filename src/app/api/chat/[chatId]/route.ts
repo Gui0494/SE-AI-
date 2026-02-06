@@ -3,13 +3,60 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { sendMessageSchema } from '@/lib/validations';
 import { formatErrorResponse, AuthenticationError, InsufficientPlanError } from '@/lib/errors';
-import { stream as aiStream } from '@/lib/ai/router';
+import { stream as aiStream, complete as aiComplete } from '@/lib/ai/router';
 import { getModel, calculateCost, getModelsByTier } from '@/lib/ai/models';
-import { manageContext } from '@/lib/ai/context-manager';
+import { manageContext, buildSummaryPrompt } from '@/lib/ai/context-manager';
 import { buildSystemPrompt } from '@/lib/ai/system-prompts';
 import { getToolsForPlan } from '@/lib/ai/tools';
 import { enforceRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { ChatMessage, StreamChunk } from '@/lib/ai/types';
+
+const SUMMARY_INTERVAL = 10; // Generate summary every N messages
+const SUMMARY_MODEL = 'gpt-4.1-nano'; // Cheapest model for summarization
+
+/**
+ * Generate a summary of the conversation and save it to the chat.
+ * Runs in the background — errors are logged but don't affect the user.
+ */
+async function maybeGenerateSummary(chatId: string, messageCount: number): Promise<void> {
+  // Only summarize every SUMMARY_INTERVAL messages (and at least 10 messages)
+  if (messageCount < SUMMARY_INTERVAL || messageCount % SUMMARY_INTERVAL !== 0) {
+    return;
+  }
+
+  try {
+    const chat = await db.chat.findUnique({
+      where: { id: chatId },
+      include: { messages: { orderBy: { createdAt: 'asc' } } },
+    });
+    if (!chat) return;
+
+    const chatMessages: ChatMessage[] = chat.messages.map((m) => ({
+      role: m.role as ChatMessage['role'],
+      content: m.content,
+    }));
+
+    const summaryPrompt = buildSummaryPrompt(chatMessages);
+    const response = await aiComplete({
+      model: SUMMARY_MODEL,
+      messages: [
+        { role: 'system', content: 'You are a helpful assistant that summarizes conversations concisely.' },
+        { role: 'user', content: summaryPrompt },
+      ],
+      temperature: 0.3,
+      maxTokens: 1024,
+    });
+
+    if (response.content) {
+      await db.chat.update({
+        where: { id: chatId },
+        data: { summary: response.content },
+      });
+    }
+  } catch (error) {
+    console.error('[Summary generation error]', error instanceof Error ? error.message : error);
+  }
+}
 
 export async function POST(
   request: NextRequest,
@@ -199,6 +246,10 @@ export async function POST(
             where: { id: chatId },
             data: { updatedAt: new Date() },
           });
+
+          // Generate summary in background (fire-and-forget)
+          const totalMessages = messageCount + 2; // existing + user + assistant
+          maybeGenerateSummary(chatId, totalMessages).catch(() => {});
         } catch (error) {
           const errMsg =
             error instanceof Error ? error.message : 'Streaming failed';

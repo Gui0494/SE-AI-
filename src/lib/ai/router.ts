@@ -8,6 +8,8 @@ import * as groq from './providers/groq';
 import { getToolByName } from './tools';
 
 const MAX_TOOL_ITERATIONS = 10;
+const MAX_RETRIES = 3;
+const RETRY_DELAYS = [1000, 2000, 4000]; // exponential backoff
 
 type Provider = {
   complete: (options: AIRequestOptions) => Promise<AIResponse>;
@@ -29,8 +31,43 @@ function getProvider(providerName: string): Provider {
   }
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryable(error: unknown): boolean {
+  if (error instanceof AIProviderError) {
+    return error.retryable;
+  }
+  return false;
+}
+
 /**
- * Non-streaming completion with automatic tool execution loop.
+ * Execute a provider call with retry logic for retryable errors (429, 500).
+ */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  retries: number = MAX_RETRIES
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt < retries && isRetryable(error)) {
+        const delay = RETRY_DELAYS[attempt] || RETRY_DELAYS[RETRY_DELAYS.length - 1];
+        await sleep(delay);
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError;
+}
+
+/**
+ * Non-streaming completion with automatic tool execution loop and retry.
  */
 export async function complete(options: AIRequestOptions): Promise<AIResponse> {
   const model = getModel(options.model);
@@ -39,7 +76,7 @@ export async function complete(options: AIRequestOptions): Promise<AIResponse> {
   }
 
   const provider = getProvider(model.provider);
-  let response = await provider.complete(options);
+  let response = await withRetry(() => provider.complete(options));
   let totalUsage = response.usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
   // Tool execution loop
@@ -48,7 +85,6 @@ export async function complete(options: AIRequestOptions): Promise<AIResponse> {
     iterations++;
     const toolResults = await executeToolCalls(response.toolCalls, options.tools || []);
 
-    // Add assistant message with tool calls and tool results to messages
     const updatedMessages: ChatMessage[] = [
       ...options.messages,
       {
@@ -63,7 +99,9 @@ export async function complete(options: AIRequestOptions): Promise<AIResponse> {
       })),
     ];
 
-    response = await provider.complete({ ...options, messages: updatedMessages });
+    response = await withRetry(() =>
+      provider.complete({ ...options, messages: updatedMessages })
+    );
 
     if (response.usage) {
       totalUsage.promptTokens += response.usage.promptTokens;
@@ -76,8 +114,7 @@ export async function complete(options: AIRequestOptions): Promise<AIResponse> {
 }
 
 /**
- * Streaming completion with tool execution.
- * Yields text chunks, tool calls, tool results, and done events.
+ * Streaming completion with tool execution and retry on initial connection.
  */
 export async function* stream(options: AIRequestOptions): AsyncGenerator<StreamChunk> {
   const model = getModel(options.model);
@@ -95,9 +132,60 @@ export async function* stream(options: AIRequestOptions): AsyncGenerator<StreamC
     const toolCalls: StreamChunk['toolCall'][] = [];
     let usage: StreamChunk['usage'];
 
-    const gen = provider.stream({ ...options, messages });
+    // Retry logic for the initial stream connection
+    let gen: AsyncGenerator<StreamChunk>;
+    let lastStreamError: unknown;
+    let connected = false;
 
-    for await (const chunk of gen) {
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        gen = provider.stream({ ...options, messages });
+        // Try to get the first chunk to verify connection
+        const firstResult = await gen!.next();
+        connected = true;
+
+        if (!firstResult.done) {
+          const chunk = firstResult.value;
+          if (chunk.type === 'text') {
+            content += chunk.content;
+            yield chunk;
+          } else if (chunk.type === 'tool_call' && chunk.toolCall) {
+            toolCalls.push(chunk.toolCall);
+            yield chunk;
+          } else if (chunk.type === 'done') {
+            usage = chunk.usage;
+          } else if (chunk.type === 'error') {
+            // Check if retryable
+            if (attempt < MAX_RETRIES) {
+              await sleep(RETRY_DELAYS[attempt] || 4000);
+              continue;
+            }
+            yield chunk;
+            return;
+          }
+        }
+        break;
+      } catch (error) {
+        lastStreamError = error;
+        if (attempt < MAX_RETRIES && isRetryable(error)) {
+          await sleep(RETRY_DELAYS[attempt] || 4000);
+          continue;
+        }
+        yield { type: 'error', error: error instanceof Error ? error.message : 'Stream failed' };
+        return;
+      }
+    }
+
+    if (!connected) {
+      yield {
+        type: 'error',
+        error: lastStreamError instanceof Error ? lastStreamError.message : 'Stream connection failed after retries',
+      };
+      return;
+    }
+
+    // Continue consuming the stream after successful first chunk
+    for await (const chunk of gen!) {
       if (chunk.type === 'text') {
         content += chunk.content;
         yield chunk;
@@ -125,7 +213,6 @@ export async function* stream(options: AIRequestOptions): AsyncGenerator<StreamC
       return;
     }
 
-    // Add assistant message and execute tools
     messages = [
       ...messages,
       {

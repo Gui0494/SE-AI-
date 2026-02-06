@@ -40,12 +40,24 @@ function formatMessages(messages: ChatMessage[]): {
     if (msg.attachments?.length) {
       for (const attachment of msg.attachments) {
         if (attachment.type === 'image') {
-          parts.push({
-            inlineData: {
-              mimeType: attachment.mimeType,
-              data: attachment.url,
-            },
-          });
+          if (attachment.url.startsWith('data:') || !attachment.url.startsWith('http')) {
+            // Base64 data — strip data URI prefix if present
+            const base64Data = attachment.url.replace(/^data:[^;]+;base64,/, '');
+            parts.push({
+              inlineData: {
+                mimeType: attachment.mimeType,
+                data: base64Data,
+              },
+            });
+          } else {
+            // URL — use fileData
+            parts.push({
+              fileData: {
+                mimeType: attachment.mimeType,
+                fileUri: attachment.url,
+              },
+            });
+          }
         }
       }
     }

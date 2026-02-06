@@ -14,6 +14,7 @@ export function ChatView() {
     selectedModel,
     error,
     currentChatId,
+    toolActivity,
     sendMessage,
     setSelectedModel,
     setError,
@@ -110,8 +111,18 @@ export function ChatView() {
             />
           )}
 
+          {/* Tool activity indicator */}
+          {isStreaming && toolActivity && (
+            <div className="flex gap-4 px-4 py-3 md:px-8 bg-zinc-900/30 border-l-2 border-blue-500">
+              <div className="flex items-center gap-2 text-sm text-blue-400">
+                <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                <span>{toolActivity}</span>
+              </div>
+            </div>
+          )}
+
           {/* Loading indicator */}
-          {isStreaming && !streamingContent && (
+          {isStreaming && !streamingContent && !toolActivity && (
             <div className="flex gap-4 px-4 py-6 md:px-8 bg-zinc-900/50">
               <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0">
                 <Bot className="w-4 h-4 text-white" />

@@ -1,4 +1,5 @@
 import { Tool } from '../types';
+import { evaluate } from 'mathjs';
 
 export const calculatorTool: Tool = {
   name: 'calculator',
@@ -10,7 +11,7 @@ export const calculatorTool: Tool = {
       expression: {
         type: 'string',
         description:
-          'The mathematical expression to evaluate (e.g., "2 + 2", "sqrt(16)", "15% of 200")',
+          'The mathematical expression to evaluate (e.g., "2 + 2", "sqrt(16)", "15% of 200", "sin(pi/4)")',
       },
     },
     required: ['expression'],
@@ -19,35 +20,21 @@ export const calculatorTool: Tool = {
     const expression = args.expression as string;
 
     try {
-      // Safe math evaluation - only allow numbers, operators, and math functions
-      const sanitized = expression
-        .replace(/\s+/g, '')
-        .replace(/(\d+)%\s*of\s*(\d+)/gi, '($1/100)*$2')
-        .replace(/sqrt\(/g, 'Math.sqrt(')
-        .replace(/abs\(/g, 'Math.abs(')
-        .replace(/pow\(/g, 'Math.pow(')
-        .replace(/round\(/g, 'Math.round(')
-        .replace(/ceil\(/g, 'Math.ceil(')
-        .replace(/floor\(/g, 'Math.floor(')
-        .replace(/log\(/g, 'Math.log(')
-        .replace(/log10\(/g, 'Math.log10(')
-        .replace(/PI/g, 'Math.PI')
-        .replace(/E(?![a-z])/g, 'Math.E');
+      // Preprocess natural language patterns
+      const normalized = expression
+        .replace(/(\d+)\s*%\s*of\s*(\d+)/gi, '($1/100)*$2');
 
-      // Validate: only allow safe characters
-      if (!/^[0-9+\-*/().,%Math.sqrtabspowroundceilfloorlogPI\sE]+$/.test(sanitized)) {
-        return `Invalid expression. Only mathematical operations are allowed.`;
+      const result = evaluate(normalized);
+
+      if (typeof result === 'number') {
+        if (!isFinite(result)) {
+          return `Result is not a finite number for: ${expression}`;
+        }
+        return `${expression} = ${result}`;
       }
 
-      // Use Function constructor for safe eval
-      const fn = new Function(`"use strict"; return (${sanitized});`);
-      const result = fn();
-
-      if (typeof result !== 'number' || !isFinite(result)) {
-        return `Result is not a valid number: ${result}`;
-      }
-
-      return `${expression} = ${result}`;
+      // mathjs can return matrices, units, etc.
+      return `${expression} = ${result.toString()}`;
     } catch (error) {
       return `Calculation error: ${error instanceof Error ? error.message : 'Invalid expression'}`;
     }

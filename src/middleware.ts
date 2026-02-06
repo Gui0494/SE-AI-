@@ -25,7 +25,15 @@ export function middleware(request: NextRequest) {
     request.cookies.get('authjs.session-token')?.value ||
     request.cookies.get('__Secure-authjs.session-token')?.value;
 
-  if (!token && !pathname.startsWith('/api')) {
+  if (!token) {
+    // API routes: return 401 JSON
+    if (pathname.startsWith('/api')) {
+      return new NextResponse(
+        JSON.stringify({ error: 'Authentication required', code: 'AUTHENTICATION_REQUIRED' }),
+        { status: 401, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+    // Pages: redirect to login
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('callbackUrl', pathname);
     return NextResponse.redirect(loginUrl);
@@ -37,6 +45,10 @@ export function middleware(request: NextRequest) {
   response.headers.set('X-Frame-Options', 'DENY');
   response.headers.set('X-XSS-Protection', '1; mode=block');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https:; frame-ancestors 'none';"
+  );
 
   return response;
 }

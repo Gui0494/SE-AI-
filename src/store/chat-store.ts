@@ -30,6 +30,7 @@ interface ChatState {
   selectedModel: string;
   sidebarOpen: boolean;
   error: string | null;
+  toolActivity: string | null;
 
   setChats: (chats: Chat[]) => void;
   addChat: (chat: Chat) => void;
@@ -44,6 +45,7 @@ interface ChatState {
   setSelectedModel: (model: string) => void;
   setSidebarOpen: (open: boolean) => void;
   setError: (error: string | null) => void;
+  setToolActivity: (activity: string | null) => void;
   reset: () => void;
 }
 
@@ -57,6 +59,7 @@ export const useChatStore = create<ChatState>((set) => ({
   selectedModel: 'gpt-4.1-mini',
   sidebarOpen: true,
   error: null,
+  toolActivity: null,
 
   setChats: (chats) => set({ chats }),
   addChat: (chat) => set((state) => ({ chats: [chat, ...state.chats] })),
@@ -77,6 +80,7 @@ export const useChatStore = create<ChatState>((set) => ({
   setSelectedModel: (selectedModel) => set({ selectedModel }),
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
   setError: (error) => set({ error }),
+  setToolActivity: (toolActivity) => set({ toolActivity }),
   reset: () =>
     set({
       currentChatId: null,
