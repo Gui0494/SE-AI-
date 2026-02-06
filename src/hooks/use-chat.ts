@@ -43,6 +43,9 @@ export function useChat() {
   const currentChatIdRef = useRef(currentChatId);
   currentChatIdRef.current = currentChatId;
 
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+
   const loadChats = useCallback(async () => {
     try {
       const res = await fetch('/api/chat');
@@ -270,7 +273,7 @@ export function useChat() {
         }
 
         // Replace the user message in the message list
-        const currentMessages = useChatStore.getState().messages;
+        const currentMessages = messagesRef.current;
         const editIdx = currentMessages.findIndex((m) => m.id === messageId);
         const keptMessages = editIdx >= 0 ? currentMessages.slice(0, editIdx) : currentMessages;
 

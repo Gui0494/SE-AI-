@@ -2,6 +2,7 @@ import { db } from '@/lib/db';
 import { notFound } from 'next/navigation';
 import { Bot, User, Sparkles } from 'lucide-react';
 import { Metadata } from 'next';
+import { SharedMessageContent } from './shared-message-content';
 
 interface Props {
   params: Promise<{ shareId: string }>;
@@ -94,9 +95,7 @@ export default async function SharedChatPage({ params }: Props) {
                   </span>
                 )}
               </div>
-              <div className="text-zinc-200 whitespace-pre-wrap text-sm leading-relaxed">
-                {msg.content}
-              </div>
+              <SharedMessageContent role={msg.role} content={msg.content} />
             </div>
           </div>
         ))}

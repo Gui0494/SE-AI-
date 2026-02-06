@@ -5,17 +5,18 @@ import Stripe from 'stripe';
 let _stripe: Stripe | null = null;
 function getStripe(): Stripe {
   if (!_stripe) {
-    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-      apiVersion: '2025-04-30.basil' as Stripe.LatestApiVersion,
-    });
+    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
   }
   return _stripe;
 }
 
-const PLAN_PRICE_MAP: Record<string, string> = {
-  [process.env.STRIPE_PRO_PRICE_ID || 'price_pro']: 'PRO',
-  [process.env.STRIPE_ENTERPRISE_PRICE_ID || 'price_enterprise']: 'ENTERPRISE',
-};
+function getPlanFromPriceId(priceId: string): string {
+  const map: Record<string, string> = {
+    [process.env.STRIPE_PRO_PRICE_ID || '']: 'PRO',
+    [process.env.STRIPE_ENTERPRISE_PRICE_ID || '']: 'ENTERPRISE',
+  };
+  return map[priceId] || 'PRO';
+}
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
         if (subscriptionId) {
           const sub = await getStripe().subscriptions.retrieve(subscriptionId);
           const priceId = sub.items.data[0]?.price.id;
-          const plan = PLAN_PRICE_MAP[priceId] || 'PRO';
+          const plan = getPlanFromPriceId(priceId);
 
           // Find user by stripeCustomerId or by metadata
           const userId = session.metadata?.userId;
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
       case 'customer.subscription.updated': {
         const sub = event.data.object as Stripe.Subscription;
         const priceId = sub.items.data[0]?.price.id;
-        const plan = PLAN_PRICE_MAP[priceId] || 'PRO';
+        const plan = getPlanFromPriceId(priceId);
 
         const existing = await db.subscription.findFirst({
           where: { stripeSubscriptionId: sub.id },

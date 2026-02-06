@@ -10,7 +10,7 @@ import { buildSystemPrompt } from '@/lib/ai/system-prompts';
 import { getToolsForPlan } from '@/lib/ai/tools';
 import { enforceRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { ChatMessage, StreamChunk } from '@/lib/ai/types';
-import { getMemories, extractMemories, upsertMemory, formatMemoriesForPrompt } from '@/lib/memory';
+import { getMemories, extractMemories, upsertMemory, enforceMemoryLimit, formatMemoriesForPrompt } from '@/lib/memory';
 
 const SUMMARY_INTERVAL = 10; // Generate summary every N messages
 const MEMORY_EXTRACT_INTERVAL = 5; // Extract memories every N messages
@@ -265,6 +265,7 @@ export async function POST(
                 for (const mem of extracted) {
                   await upsertMemory(session.user.id, mem.key, mem.value, mem.category);
                 }
+                await enforceMemoryLimit(session.user.id);
               })
               .catch(console.error);
           }

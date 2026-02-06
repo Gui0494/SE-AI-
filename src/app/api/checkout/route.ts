@@ -8,17 +8,18 @@ import Stripe from 'stripe';
 let _stripe: Stripe | null = null;
 function getStripe(): Stripe {
   if (!_stripe) {
-    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-      apiVersion: '2025-04-30.basil' as Stripe.LatestApiVersion,
-    });
+    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '');
   }
   return _stripe;
 }
 
-const PRICE_IDS: Record<string, string> = {
-  PRO: process.env.STRIPE_PRO_PRICE_ID || '',
-  ENTERPRISE: process.env.STRIPE_ENTERPRISE_PRICE_ID || '',
-};
+function getPriceId(plan: string): string {
+  const ids: Record<string, string> = {
+    PRO: process.env.STRIPE_PRO_PRICE_ID || '',
+    ENTERPRISE: process.env.STRIPE_ENTERPRISE_PRICE_ID || '',
+  };
+  return ids[plan] || '';
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'Invalid input', code: 'VALIDATION_ERROR' }, { status: 400 });
     }
 
-    const priceId = PRICE_IDS[parsed.data.plan];
+    const priceId = getPriceId(parsed.data.plan);
     if (!priceId) {
       return Response.json({ error: 'Plan not configured', code: 'CONFIG_ERROR' }, { status: 500 });
     }

@@ -37,6 +37,26 @@ export async function deleteMemory(userId: string, memoryId: string) {
   });
 }
 
+const MAX_MEMORIES_PER_USER = 50;
+
+export async function enforceMemoryLimit(userId: string): Promise<void> {
+  const count = await db.memory.count({ where: { userId } });
+  if (count <= MAX_MEMORIES_PER_USER) return;
+
+  const toDelete = await db.memory.findMany({
+    where: { userId },
+    orderBy: { updatedAt: 'asc' },
+    take: count - MAX_MEMORIES_PER_USER,
+    select: { id: true },
+  });
+
+  if (toDelete.length > 0) {
+    await db.memory.deleteMany({
+      where: { id: { in: toDelete.map((m) => m.id) } },
+    });
+  }
+}
+
 export async function extractMemories(
   messages: ChatMessage[]
 ): Promise<{ key: string; value: string; category: string }[]> {
@@ -60,6 +80,7 @@ export async function extractMemories(
           content: `Analyze this conversation and extract factual information about the user that would be useful to remember across conversations.
 Return a JSON array of objects with: key (unique snake_case identifier), value (the fact), category (one of: personal, preferences, work, technical, projects).
 Only extract concrete facts, not opinions or temporary states. If nothing worth remembering, return [].
+NEVER extract sensitive data such as: passwords, API keys, tokens, credit card numbers, social security numbers, private keys, secrets, or any credentials. Skip any such information entirely.
 Examples: {"key": "programming_language", "value": "Prefers TypeScript over JavaScript", "category": "preferences"}
 {"key": "name", "value": "User name is Guilherme", "category": "personal"}
 
