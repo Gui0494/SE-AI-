@@ -12,6 +12,7 @@ import { enforceRateLimitAsync, incrementRateLimit } from '@/lib/rate-limit';
 import { ChatMessage, StreamChunk } from '@/lib/ai/types';
 import { getMemories, extractMemories, upsertMemory, enforceMemoryLimit, formatMemoriesForPrompt } from '@/lib/memory';
 import { sanitizeText } from '@/lib/sanitize';
+import { logger } from '@/lib/logger';
 
 const SUMMARY_INTERVAL = 10; // Generate summary every N messages
 const MEMORY_EXTRACT_INTERVAL = 5; // Extract memories every N messages
@@ -121,6 +122,8 @@ export async function POST(
 
     // Rate limiting (uses Redis in production, in-memory fallback)
     const rateResult = await enforceRateLimitAsync(session.user.id, plan);
+
+    logger.info('chat.message', { chatId, model: modelId, plan, remaining: rateResult.remaining });
 
     // Sanitize user input
     const sanitizedContent = sanitizeText(parsed.data.content);
@@ -299,6 +302,7 @@ export async function POST(
     });
   } catch (error) {
     const formatted = formatErrorResponse(error);
+    logger.error('chat.error', { chatId, code: formatted.code, status: formatted.statusCode, error: formatted.error });
     return new Response(
       JSON.stringify({ error: formatted.error, code: formatted.code }),
       {
