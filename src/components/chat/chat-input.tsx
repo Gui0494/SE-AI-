@@ -352,7 +352,7 @@ export function ChatInput({
             )}
           </div>
           <span className="text-xs text-zinc-600">
-            Press Enter to send, Shift+Enter for new line
+            Enter to send &middot; Shift+Enter for new line &middot; Ctrl+Shift+O new chat
           </span>
         </div>
       </div>

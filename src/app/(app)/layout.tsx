@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { useChat } from '@/hooks/use-chat';
 import { ToastProvider } from '@/components/ui/toast';
 import { WelcomeModal } from '@/components/onboarding/welcome-modal';
+import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const {
@@ -31,6 +32,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const handleNewChat = async () => {
     await createChat();
   };
+
+  const handleFocusInput = useCallback(() => {
+    const textarea = document.querySelector('textarea');
+    textarea?.focus();
+  }, []);
+
+  useKeyboardShortcuts({
+    onNewChat: handleNewChat,
+    onToggleSidebar: () => setSidebarOpen(!sidebarOpen),
+    onFocusInput: handleFocusInput,
+  });
 
   return (
     <ToastProvider>
