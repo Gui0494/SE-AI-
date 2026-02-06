@@ -8,7 +8,7 @@ import { getModel, calculateCost, getModelsByTier } from '@/lib/ai/models';
 import { manageContext, buildSummaryPrompt } from '@/lib/ai/context-manager';
 import { buildSystemPrompt } from '@/lib/ai/system-prompts';
 import { getToolsForPlan } from '@/lib/ai/tools';
-import { enforceRateLimit, incrementRateLimit } from '@/lib/rate-limit';
+import { enforceRateLimitAsync, incrementRateLimit } from '@/lib/rate-limit';
 import { ChatMessage, StreamChunk } from '@/lib/ai/types';
 import { getMemories, extractMemories, upsertMemory, enforceMemoryLimit, formatMemoriesForPrompt } from '@/lib/memory';
 
@@ -118,8 +118,8 @@ export async function POST(
       throw new InsufficientPlanError(modelInfo.tier.toUpperCase(), plan);
     }
 
-    // Rate limiting
-    const rateResult = enforceRateLimit(session.user.id, plan);
+    // Rate limiting (uses Redis in production, in-memory fallback)
+    const rateResult = await enforceRateLimitAsync(session.user.id, plan);
 
     // Save user message
     await db.message.create({
