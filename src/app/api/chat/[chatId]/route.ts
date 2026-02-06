@@ -10,8 +10,10 @@ import { buildSystemPrompt } from '@/lib/ai/system-prompts';
 import { getToolsForPlan } from '@/lib/ai/tools';
 import { enforceRateLimit, incrementRateLimit } from '@/lib/rate-limit';
 import { ChatMessage, StreamChunk } from '@/lib/ai/types';
+import { getMemories, extractMemories, upsertMemory, formatMemoriesForPrompt } from '@/lib/memory';
 
 const SUMMARY_INTERVAL = 10; // Generate summary every N messages
+const MEMORY_EXTRACT_INTERVAL = 5; // Extract memories every N messages
 const SUMMARY_MODEL = 'gpt-4.1-nano'; // Cheapest model for summarization
 
 /**
@@ -154,11 +156,16 @@ export async function POST(
       attachments: parsed.data.attachments,
     });
 
+    // Fetch user memories
+    const memories = await getMemories(session.user.id);
+    const memoryStrings = formatMemoriesForPrompt(memories);
+
     // Build system prompt
     const tools = getToolsForPlan(plan);
     const systemPrompt = buildSystemPrompt({
       style: parsed.data.style || chat.style,
       context: chat.summary || undefined,
+      memories: memoryStrings,
       tools: tools.map((t) => t.name),
     });
 
@@ -250,6 +257,17 @@ export async function POST(
           // Generate summary in background (fire-and-forget)
           const totalMessages = messageCount + 2; // existing + user + assistant
           maybeGenerateSummary(chatId, totalMessages).catch(() => {});
+
+          // Extract memories every MEMORY_EXTRACT_INTERVAL messages
+          if (totalMessages % MEMORY_EXTRACT_INTERVAL === 0) {
+            extractMemories(managed.messages.slice(-10))
+              .then(async (extracted) => {
+                for (const mem of extracted) {
+                  await upsertMemory(session.user.id, mem.key, mem.value, mem.category);
+                }
+              })
+              .catch(console.error);
+          }
         } catch (error) {
           const errMsg =
             error instanceof Error ? error.message : 'Streaming failed';

@@ -1,13 +1,15 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ChatMessage } from './chat-message';
 import { ChatInput } from './chat-input';
 import { useChat } from '@/hooks/use-chat';
-import { Bot, Sparkles } from 'lucide-react';
+import { Bot, Sparkles, MoreHorizontal, Share2, Download, Trash2, Link, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export function ChatView() {
   const {
+    chats,
     messages,
     isStreaming,
     streamingContent,
@@ -18,16 +20,61 @@ export function ChatView() {
     sendMessage,
     setSelectedModel,
     setError,
+    regenerateMessage,
+    editMessage,
+    shareChat,
+    unshareChat,
+    exportChat,
+    deleteChat,
   } = useChat();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [showMenu, setShowMenu] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
 
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const currentChat = chats.find((c) => c.id === currentChatId);
+
   const handleSend = (content: string) => {
     sendMessage(content);
+  };
+
+  const handleShare = async () => {
+    if (!currentChatId) return;
+    if (currentChat?.shareId) {
+      await unshareChat(currentChatId);
+      setShareUrl(null);
+    } else {
+      const url = await shareChat(currentChatId);
+      if (url) setShareUrl(url);
+    }
+    setShowMenu(false);
+  };
+
+  const handleExport = async (format: 'md' | 'json' | 'txt') => {
+    if (!currentChatId) return;
+    await exportChat(currentChatId, format);
+    setShowMenu(false);
+  };
+
+  const handleDelete = async () => {
+    if (!currentChatId) return;
+    await deleteChat(currentChatId);
+    setShowMenu(false);
   };
 
   // Empty state
@@ -76,6 +123,85 @@ export function ChatView() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      {/* Chat header with menu */}
+      {currentChatId && (
+        <div className="flex items-center justify-between px-4 py-2 border-b border-zinc-800 bg-zinc-950">
+          <h2 className="text-sm font-medium text-zinc-300 truncate">
+            {currentChat?.title || 'Chat'}
+          </h2>
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-200 transition-colors"
+              aria-label="Chat menu"
+            >
+              <MoreHorizontal className="w-4 h-4" />
+            </button>
+            {showMenu && (
+              <div className="absolute right-0 top-full mt-1 w-48 bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl overflow-hidden z-50">
+                <button
+                  onClick={handleShare}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors"
+                >
+                  <Share2 className="w-4 h-4" />
+                  {currentChat?.shareId ? 'Unshare' : 'Share'}
+                </button>
+                <div className="border-t border-zinc-800">
+                  <div className="px-4 py-1.5 text-xs text-zinc-500">Export as</div>
+                  <button
+                    onClick={() => handleExport('md')}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors"
+                  >
+                    <Download className="w-4 h-4" /> Markdown
+                  </button>
+                  <button
+                    onClick={() => handleExport('json')}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors"
+                  >
+                    <Download className="w-4 h-4" /> JSON
+                  </button>
+                  <button
+                    onClick={() => handleExport('txt')}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors"
+                  >
+                    <Download className="w-4 h-4" /> Text
+                  </button>
+                </div>
+                <div className="border-t border-zinc-800">
+                  <button
+                    onClick={handleDelete}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-zinc-800 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" /> Delete chat
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Share URL banner */}
+      {shareUrl && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-blue-900/20 border-b border-blue-800">
+          <Link className="w-4 h-4 text-blue-400" />
+          <span className="text-sm text-blue-300 flex-1 truncate">
+            {window.location.origin}{shareUrl}
+          </span>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(`${window.location.origin}${shareUrl}`);
+            }}
+            className="text-xs text-blue-400 hover:text-blue-300 px-2 py-1 bg-blue-900/30 rounded"
+          >
+            Copy
+          </button>
+          <button onClick={() => setShareUrl(null)} className="text-blue-400 hover:text-blue-300">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Error banner */}
       {error && (
         <div className="bg-red-900/30 border-b border-red-800 px-4 py-2 flex items-center justify-between">
@@ -98,6 +224,9 @@ export function ChatView() {
               role={msg.role}
               content={msg.content}
               model={msg.model}
+              messageId={msg.id}
+              onRegenerate={!isStreaming ? regenerateMessage : undefined}
+              onEdit={!isStreaming ? editMessage : undefined}
             />
           ))}
 

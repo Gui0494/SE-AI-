@@ -1,12 +1,14 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import {
   MessageSquarePlus,
   Trash2,
   Settings,
   PanelLeftClose,
   PanelLeft,
+  Brain,
 } from 'lucide-react';
 import { cn, groupChatsByDate } from '@/lib/utils';
 
@@ -115,11 +117,14 @@ export function Sidebar({
       </div>
 
       {/* Footer */}
-      <div className="border-t border-zinc-800 p-3">
-        <button className="flex items-center gap-2 w-full px-3 py-2 text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 rounded-lg transition-colors">
+      <div className="border-t border-zinc-800 p-3 space-y-1">
+        <Link
+          href="/settings"
+          className="flex items-center gap-2 w-full px-3 py-2 text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 rounded-lg transition-colors"
+        >
           <Settings className="w-4 h-4" />
           Settings
-        </button>
+        </Link>
       </div>
     </aside>
   );
