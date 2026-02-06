@@ -4,8 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 
 const PLAN_LIMITS: Record<string, number> = {
-  FREE: 50,
-  PRO: 1000,
+  FREE: 20,
+  PRO: 500,
   ENTERPRISE: 10000,
 };
 
