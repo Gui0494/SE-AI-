@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import { useChat } from '@/hooks/use-chat';
 import { ToastProvider } from '@/components/ui/toast';
+import { WelcomeModal } from '@/components/onboarding/welcome-modal';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const {
@@ -46,6 +47,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         />
         <main className="flex-1 flex flex-col min-w-0">{children}</main>
       </div>
+      <WelcomeModal />
     </ToastProvider>
   );
 }

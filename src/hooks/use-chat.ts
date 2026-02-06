@@ -15,6 +15,7 @@ export function useChat() {
   const selectedModel = useChatStore((s) => s.selectedModel);
   const sidebarOpen = useChatStore((s) => s.sidebarOpen);
   const error = useChatStore((s) => s.error);
+  const rateLimitHit = useChatStore((s) => s.rateLimitHit);
   const toolActivity = useChatStore((s) => s.toolActivity);
   const branches = useChatStore((s) => s.branches);
   const activeBranch = useChatStore((s) => s.activeBranch);
@@ -32,6 +33,7 @@ export function useChat() {
   const setSelectedModel = useChatStore((s) => s.setSelectedModel);
   const setSidebarOpen = useChatStore((s) => s.setSidebarOpen);
   const setError = useChatStore((s) => s.setError);
+  const setRateLimitHit = useChatStore((s) => s.setRateLimitHit);
   const setToolActivity = useChatStore((s) => s.setToolActivity);
   const setBranches = useChatStore((s) => s.setBranches);
   const setActiveBranch = useChatStore((s) => s.setActiveBranch);
@@ -178,6 +180,10 @@ export function useChat() {
 
         if (!res.ok) {
           const errorData = await res.json();
+          const code = errorData.code;
+          if (code === 'RATE_LIMIT_EXCEEDED' || code === 'INSUFFICIENT_PLAN') {
+            setRateLimitHit(true);
+          }
           throw new Error(errorData.error || 'Failed to send message');
         }
 
@@ -202,7 +208,7 @@ export function useChat() {
         setToolActivity(null);
       }
     },
-    [createChat, loadChats, addMessage, setIsStreaming, setStreamingContent, setToolActivity, setError, consumeSSEStream]
+    [createChat, loadChats, addMessage, setIsStreaming, setStreamingContent, setToolActivity, setError, setRateLimitHit, consumeSSEStream]
   );
 
   const regenerateMessage = useCallback(
@@ -224,6 +230,10 @@ export function useChat() {
 
         if (!res.ok) {
           const errorData = await res.json();
+          const code = errorData.code;
+          if (code === 'RATE_LIMIT_EXCEEDED' || code === 'INSUFFICIENT_PLAN') {
+            setRateLimitHit(true);
+          }
           throw new Error(errorData.error || 'Regeneration failed');
         }
 
@@ -247,7 +257,7 @@ export function useChat() {
         setToolActivity(null);
       }
     },
-    [replaceMessage, setIsStreaming, setStreamingContent, setToolActivity, setError, consumeSSEStream]
+    [replaceMessage, setIsStreaming, setStreamingContent, setToolActivity, setError, setRateLimitHit, consumeSSEStream]
   );
 
   const editMessage = useCallback(
@@ -269,6 +279,10 @@ export function useChat() {
 
         if (!res.ok) {
           const errorData = await res.json();
+          const code = errorData.code;
+          if (code === 'RATE_LIMIT_EXCEEDED' || code === 'INSUFFICIENT_PLAN') {
+            setRateLimitHit(true);
+          }
           throw new Error(errorData.error || 'Edit failed');
         }
 
@@ -306,7 +320,7 @@ export function useChat() {
         setToolActivity(null);
       }
     },
-    [addMessage, setMessages, setIsStreaming, setStreamingContent, setToolActivity, setError, consumeSSEStream]
+    [addMessage, setMessages, setIsStreaming, setStreamingContent, setToolActivity, setError, setRateLimitHit, consumeSSEStream]
   );
 
   const loadBranches = useCallback(
@@ -400,6 +414,7 @@ export function useChat() {
     selectedModel,
     sidebarOpen,
     error,
+    rateLimitHit,
     toolActivity,
     branches,
     activeBranch,
@@ -416,6 +431,7 @@ export function useChat() {
     setSelectedModel,
     setSidebarOpen,
     setError,
+    setRateLimitHit,
     setToolActivity,
     setBranches,
     setActiveBranch,

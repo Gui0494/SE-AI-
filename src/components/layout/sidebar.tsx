@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { cn, groupChatsByDate } from '@/lib/utils';
 import { SidebarSkeleton } from '@/components/ui/skeleton';
+import { UsageIndicator } from './usage-indicator';
 
 interface Chat {
   id: string;
@@ -121,6 +122,7 @@ export function Sidebar({
 
       {/* Footer */}
       <div className="border-t border-zinc-800 p-3 space-y-1">
+        <UsageIndicator />
         <Link
           href="/settings"
           className="flex items-center gap-2 w-full px-3 py-2 text-sm text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 rounded-lg transition-colors"

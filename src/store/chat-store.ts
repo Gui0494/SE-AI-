@@ -41,6 +41,7 @@ interface ChatState {
   selectedModel: string;
   sidebarOpen: boolean;
   error: string | null;
+  rateLimitHit: boolean;
   toolActivity: string | null;
   branches: Record<string, Message[]>;
   activeBranch: Record<string, number>; // messageId → active branch index
@@ -59,6 +60,7 @@ interface ChatState {
   setSelectedModel: (model: string) => void;
   setSidebarOpen: (open: boolean) => void;
   setError: (error: string | null) => void;
+  setRateLimitHit: (hit: boolean) => void;
   setToolActivity: (activity: string | null) => void;
   setBranches: (messageId: string, branches: Message[]) => void;
   setActiveBranch: (messageId: string, index: number) => void;
@@ -76,6 +78,7 @@ export const useChatStore = create<ChatState>((set) => ({
   selectedModel: 'gpt-4.1-mini',
   sidebarOpen: true,
   error: null,
+  rateLimitHit: false,
   toolActivity: null,
   branches: {},
   activeBranch: {},
@@ -103,6 +106,7 @@ export const useChatStore = create<ChatState>((set) => ({
   setSelectedModel: (selectedModel) => set({ selectedModel }),
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
   setError: (error) => set({ error }),
+  setRateLimitHit: (rateLimitHit) => set({ rateLimitHit }),
   setToolActivity: (toolActivity) => set({ toolActivity }),
   setBranches: (messageId, branches) =>
     set((state) => ({
@@ -124,6 +128,7 @@ export const useChatStore = create<ChatState>((set) => ({
       isStreaming: false,
       streamingContent: '',
       error: null,
+      rateLimitHit: false,
       branches: {},
       activeBranch: {},
     }),

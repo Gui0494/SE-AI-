@@ -7,6 +7,7 @@ import { useChat } from '@/hooks/use-chat';
 import { useToast } from '@/components/ui/toast';
 import { ChatSkeleton } from '@/components/ui/skeleton';
 import { Bot, Sparkles, MoreHorizontal, Share2, Download, Trash2, Link, X } from 'lucide-react';
+import { UpgradePrompt } from '@/components/billing/upgrade-prompt';
 
 export function ChatView() {
   const {
@@ -17,6 +18,7 @@ export function ChatView() {
     streamingContent,
     selectedModel,
     error,
+    rateLimitHit,
     currentChatId,
     toolActivity,
     branches,
@@ -24,6 +26,7 @@ export function ChatView() {
     sendMessage,
     setSelectedModel,
     setError,
+    setRateLimitHit,
     setActiveBranch,
     regenerateMessage,
     editMessage,
@@ -305,6 +308,11 @@ export function ChatView() {
         </div>
         )}
       </div>
+
+      {/* Upgrade prompt */}
+      {rateLimitHit && (
+        <UpgradePrompt onDismiss={() => setRateLimitHit(false)} />
+      )}
 
       {/* Input */}
       <ChatInput
