@@ -1,0 +1,201 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum SubscriptionPlan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  PAST_DUE
+  EXPIRED
+}
+
+enum MessageRole {
+  user
+  assistant
+  system
+  tool
+}
+
+enum ChatStyle {
+  default
+  concise
+  detailed
+  creative
+  technical
+  friendly
+  professional
+  teacher
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          UserRole  @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts     Account[]
+  sessions     Session[]
+  chats        Chat[]
+  subscription Subscription?
+  memories     Memory[]
+  loginHistory LoginHistory[]
+
+  @@index([email])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Subscription {
+  id              String             @id @default(cuid())
+  userId          String             @unique
+  plan            SubscriptionPlan   @default(FREE)
+  status          SubscriptionStatus @default(ACTIVE)
+  stripeCustomerId    String?        @unique
+  stripeSubscriptionId String?       @unique
+  stripePriceId   String?
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  messagesUsed    Int                @default(0)
+  messagesLimit   Int                @default(20)
+  tokensUsed      Int                @default(0)
+  totalCost       Float              @default(0)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([stripeCustomerId])
+}
+
+model Chat {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String    @default("New Chat")
+  style     ChatStyle @default(default)
+  model     String    @default("gpt-4.1-mini")
+  summary   String?   @db.Text
+  shareId   String?   @unique
+  parentId  String?
+  archived  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent   Chat?     @relation("ChatBranches", fields: [parentId], references: [id])
+  branches Chat[]    @relation("ChatBranches")
+  messages Message[]
+
+  @@index([userId])
+  @@index([userId, updatedAt])
+  @@index([shareId])
+}
+
+model Message {
+  id          String      @id @default(cuid())
+  chatId      String
+  role        MessageRole
+  content     String      @db.Text
+  model       String?
+  cost        Float?
+  tokensIn    Int?
+  tokensOut   Int?
+  toolCalls   Json?
+  toolResults Json?
+  attachments Json?
+  metadata    Json?
+  parentId    String?
+  createdAt   DateTime    @default(now())
+
+  chat   Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  parent Message? @relation("MessageBranches", fields: [parentId], references: [id])
+  branches Message[] @relation("MessageBranches")
+
+  @@index([chatId])
+  @@index([chatId, createdAt])
+}
+
+model Memory {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String
+  value     String   @db.Text
+  category  String   @default("general")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId])
+  @@index([userId, category])
+}
+
+model LoginHistory {
+  id        String   @id @default(cuid())
+  userId    String
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
