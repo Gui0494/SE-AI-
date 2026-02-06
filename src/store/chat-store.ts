@@ -1,5 +1,13 @@
 import { create } from 'zustand';
 
+export interface MessageAttachment {
+  type: 'image' | 'file';
+  url: string;
+  name: string;
+  mimeType: string;
+  size: number;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system' | 'tool';
@@ -7,6 +15,7 @@ export interface Message {
   model?: string;
   cost?: number;
   toolCalls?: unknown[];
+  attachments?: MessageAttachment[];
   parentId?: string | null;
   createdAt: string;
 }

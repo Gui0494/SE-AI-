@@ -1,16 +1,33 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { User, Bot, Copy, Check, RefreshCw, Pencil, X } from 'lucide-react';
+import { User, Bot, Copy, Check, RefreshCw, Pencil, X, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { MarkdownRenderer } from './markdown-renderer';
 import { cn } from '@/lib/utils';
+
+interface Attachment {
+  type: 'image' | 'file';
+  url: string;
+  name: string;
+  mimeType: string;
+  size: number;
+}
+
+interface BranchInfo {
+  total: number;
+  current: number;
+  onPrev: () => void;
+  onNext: () => void;
+}
 
 interface ChatMessageProps {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
   model?: string;
   messageId?: string;
+  attachments?: Attachment[];
   isStreaming?: boolean;
+  branch?: BranchInfo;
   onRegenerate?: (messageId: string) => void;
   onEdit?: (messageId: string, newContent: string) => void;
 }
@@ -20,7 +37,9 @@ export function ChatMessage({
   content,
   model,
   messageId,
+  attachments,
   isStreaming,
+  branch,
   onRegenerate,
   onEdit,
 }: ChatMessageProps) {
@@ -95,7 +114,58 @@ export function ChatMessage({
               {model}
             </span>
           )}
+          {branch && branch.total > 1 && (
+            <div className="flex items-center gap-1 ml-auto">
+              <button
+                onClick={branch.onPrev}
+                disabled={branch.current <= 0}
+                className="p-0.5 text-zinc-500 hover:text-zinc-300 disabled:opacity-30 transition-colors"
+                aria-label="Previous branch"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <span className="text-xs text-zinc-500 tabular-nums">
+                {branch.current + 1}/{branch.total}
+              </span>
+              <button
+                onClick={branch.onNext}
+                disabled={branch.current >= branch.total - 1}
+                className="p-0.5 text-zinc-500 hover:text-zinc-300 disabled:opacity-30 transition-colors"
+                aria-label="Next branch"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
+        {/* Attachments */}
+        {attachments && attachments.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2">
+            {attachments.map((att, i) => (
+              <a
+                key={i}
+                href={att.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block"
+              >
+                {att.type === 'image' ? (
+                  <img
+                    src={att.url}
+                    alt={att.name}
+                    className="max-w-xs max-h-48 rounded-lg border border-zinc-700 object-cover"
+                  />
+                ) : (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg hover:bg-zinc-750 transition-colors">
+                    <FileText className="w-4 h-4 text-zinc-400" />
+                    <span className="text-xs text-zinc-300 truncate max-w-[150px]">{att.name}</span>
+                  </div>
+                )}
+              </a>
+            ))}
+          </div>
+        )}
+
         <div className="text-zinc-200">
           {isEditing ? (
             <div className="space-y-2">

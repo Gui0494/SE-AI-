@@ -4,30 +4,37 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ChatMessage } from './chat-message';
 import { ChatInput } from './chat-input';
 import { useChat } from '@/hooks/use-chat';
+import { useToast } from '@/components/ui/toast';
+import { ChatSkeleton } from '@/components/ui/skeleton';
 import { Bot, Sparkles, MoreHorizontal, Share2, Download, Trash2, Link, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 export function ChatView() {
   const {
     chats,
     messages,
+    isLoading,
     isStreaming,
     streamingContent,
     selectedModel,
     error,
     currentChatId,
     toolActivity,
+    branches,
+    activeBranch,
     sendMessage,
     setSelectedModel,
     setError,
+    setActiveBranch,
     regenerateMessage,
     editMessage,
+    loadBranches,
     shareChat,
     unshareChat,
     exportChat,
     deleteChat,
   } = useChat();
 
+  const { toast } = useToast();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -36,6 +43,14 @@ export function ChatView() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, streamingContent]);
+
+  // Show errors as toasts
+  useEffect(() => {
+    if (error) {
+      toast('error', error);
+      setError(null);
+    }
+  }, [error, toast, setError]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -49,6 +64,31 @@ export function ChatView() {
 
   const currentChat = chats.find((c) => c.id === currentChatId);
 
+  const getBranchInfo = (msgId: string) => {
+    const msgBranches = branches[msgId];
+    if (!msgBranches || msgBranches.length <= 1) return undefined;
+    const current = activeBranch[msgId] || 0;
+    return {
+      total: msgBranches.length,
+      current,
+      onPrev: () => {
+        if (current > 0) setActiveBranch(msgId, current - 1);
+      },
+      onNext: () => {
+        if (current < msgBranches.length - 1) setActiveBranch(msgId, current + 1);
+      },
+    };
+  };
+
+  // Auto-load branches for assistant messages with parentId
+  useEffect(() => {
+    for (const msg of messages) {
+      if (msg.role === 'assistant' && msg.parentId && !branches[msg.parentId]) {
+        loadBranches(msg.parentId);
+      }
+    }
+  }, [messages, branches, loadBranches]);
+
   const handleSend = (content: string) => {
     sendMessage(content);
   };
@@ -58,9 +98,13 @@ export function ChatView() {
     if (currentChat?.shareId) {
       await unshareChat(currentChatId);
       setShareUrl(null);
+      toast('info', 'Chat unshared');
     } else {
       const url = await shareChat(currentChatId);
-      if (url) setShareUrl(url);
+      if (url) {
+        setShareUrl(url);
+        toast('success', 'Share link created');
+      }
     }
     setShowMenu(false);
   };
@@ -191,6 +235,7 @@ export function ChatView() {
           <button
             onClick={() => {
               navigator.clipboard.writeText(`${window.location.origin}${shareUrl}`);
+              toast('success', 'Link copied to clipboard');
             }}
             className="text-xs text-blue-400 hover:text-blue-300 px-2 py-1 bg-blue-900/30 rounded"
           >
@@ -202,21 +247,11 @@ export function ChatView() {
         </div>
       )}
 
-      {/* Error banner */}
-      {error && (
-        <div className="bg-red-900/30 border-b border-red-800 px-4 py-2 flex items-center justify-between">
-          <span className="text-sm text-red-300">{error}</span>
-          <button
-            onClick={() => setError(null)}
-            className="text-red-400 hover:text-red-200 text-sm"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
-
       {/* Messages */}
       <div className="flex-1 overflow-y-auto">
+        {isLoading ? (
+          <ChatSkeleton />
+        ) : (
         <div className="max-w-3xl mx-auto">
           {messages.map((msg) => (
             <ChatMessage
@@ -225,6 +260,8 @@ export function ChatView() {
               content={msg.content}
               model={msg.model}
               messageId={msg.id}
+              attachments={msg.attachments}
+              branch={msg.parentId ? getBranchInfo(msg.parentId) : undefined}
               onRegenerate={!isStreaming ? regenerateMessage : undefined}
               onEdit={!isStreaming ? editMessage : undefined}
             />
@@ -266,6 +303,7 @@ export function ChatView() {
 
           <div ref={messagesEndRef} />
         </div>
+        )}
       </div>
 
       {/* Input */}

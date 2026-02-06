@@ -8,9 +8,9 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeft,
-  Brain,
 } from 'lucide-react';
 import { cn, groupChatsByDate } from '@/lib/utils';
+import { SidebarSkeleton } from '@/components/ui/skeleton';
 
 interface Chat {
   id: string;
@@ -24,6 +24,7 @@ interface SidebarProps {
   chats: Chat[];
   currentChatId: string | null;
   isOpen: boolean;
+  loading?: boolean;
   onToggle: () => void;
   onNewChat: () => void;
   onSelectChat: (id: string) => void;
@@ -34,6 +35,7 @@ export function Sidebar({
   chats,
   currentChatId,
   isOpen,
+  loading,
   onToggle,
   onNewChat,
   onSelectChat,
@@ -78,7 +80,8 @@ export function Sidebar({
 
       {/* Chat List */}
       <div className="flex-1 overflow-y-auto p-2">
-        {grouped.length === 0 && (
+        {loading && <SidebarSkeleton />}
+        {!loading && grouped.length === 0 && (
           <p className="text-sm text-zinc-500 text-center mt-8 px-4">
             No conversations yet. Start a new chat!
           </p>
