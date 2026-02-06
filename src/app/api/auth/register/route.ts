@@ -3,9 +3,22 @@ import bcrypt from 'bcryptjs';
 import { db } from '@/lib/db';
 import { registerSchema } from '@/lib/validations';
 import { formatErrorResponse, ValidationError } from '@/lib/errors';
+import { checkAuthRateLimit } from '@/lib/rate-limit/auth';
+import { sanitizeShortText } from '@/lib/sanitize';
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit by IP
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const rateCheck = checkAuthRateLimit(ip, 'register');
+    if (!rateCheck.allowed) {
+      const retryAfter = Math.ceil(rateCheck.retryAfterMs / 1000);
+      return NextResponse.json(
+        { error: 'Too many registration attempts. Please try again later.', code: 'RATE_LIMIT' },
+        { status: 429, headers: { 'Retry-After': String(retryAfter) } }
+      );
+    }
+
     const body = await request.json();
     const parsed = registerSchema.safeParse(body);
 
@@ -35,8 +48,8 @@ export async function POST(request: NextRequest) {
     // Create user
     const user = await db.user.create({
       data: {
-        name: parsed.data.name,
-        email: parsed.data.email,
+        name: sanitizeShortText(parsed.data.name),
+        email: parsed.data.email.trim().toLowerCase(),
         password: hashedPassword,
       },
     });

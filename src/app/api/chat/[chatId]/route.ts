@@ -11,6 +11,7 @@ import { getToolsForPlan } from '@/lib/ai/tools';
 import { enforceRateLimitAsync, incrementRateLimit } from '@/lib/rate-limit';
 import { ChatMessage, StreamChunk } from '@/lib/ai/types';
 import { getMemories, extractMemories, upsertMemory, enforceMemoryLimit, formatMemoriesForPrompt } from '@/lib/memory';
+import { sanitizeText } from '@/lib/sanitize';
 
 const SUMMARY_INTERVAL = 10; // Generate summary every N messages
 const MEMORY_EXTRACT_INTERVAL = 5; // Extract memories every N messages
@@ -121,12 +122,15 @@ export async function POST(
     // Rate limiting (uses Redis in production, in-memory fallback)
     const rateResult = await enforceRateLimitAsync(session.user.id, plan);
 
+    // Sanitize user input
+    const sanitizedContent = sanitizeText(parsed.data.content);
+
     // Save user message
     await db.message.create({
       data: {
         chatId,
         role: 'user',
-        content: parsed.data.content,
+        content: sanitizedContent,
         attachments: parsed.data.attachments ? JSON.parse(JSON.stringify(parsed.data.attachments)) : undefined,
       },
     });
@@ -135,9 +139,9 @@ export async function POST(
     const messageCount = chat.messages.length;
     if (messageCount === 0) {
       const title =
-        parsed.data.content.length > 50
-          ? parsed.data.content.substring(0, 50) + '...'
-          : parsed.data.content;
+        sanitizedContent.length > 50
+          ? sanitizedContent.substring(0, 50) + '...'
+          : sanitizedContent;
       await db.chat.update({ where: { id: chatId }, data: { title } });
     }
 
@@ -152,7 +156,7 @@ export async function POST(
     // Add current user message
     historyMessages.push({
       role: 'user',
-      content: parsed.data.content,
+      content: sanitizedContent,
       attachments: parsed.data.attachments,
     });
 

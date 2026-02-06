@@ -5,6 +5,7 @@ import GoogleProvider from 'next-auth/providers/google';
 import GitHubProvider from 'next-auth/providers/github';
 import bcrypt from 'bcryptjs';
 import { db } from './db';
+import { checkAuthRateLimit } from './rate-limit/auth';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(db),
@@ -29,6 +30,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
+
+        // Rate limit login attempts by email
+        const rateCheck = checkAuthRateLimit(credentials.email as string, 'login');
+        if (!rateCheck.allowed) return null;
 
         const user = await db.user.findUnique({
           where: { email: credentials.email as string },

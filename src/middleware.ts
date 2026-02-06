@@ -39,6 +39,29 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // CSRF protection: verify Origin header for API mutations
+  if (pathname.startsWith('/api') && request.method !== 'GET' && request.method !== 'HEAD') {
+    const origin = request.headers.get('origin');
+    const host = request.headers.get('host');
+    if (origin && host) {
+      try {
+        const originHost = new URL(origin).host;
+        if (originHost !== host) {
+          return new NextResponse(
+            JSON.stringify({ error: 'Forbidden: origin mismatch', code: 'CSRF_ERROR' }),
+            { status: 403, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+      } catch {
+        // Invalid origin URL — block
+        return new NextResponse(
+          JSON.stringify({ error: 'Forbidden', code: 'CSRF_ERROR' }),
+          { status: 403, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+  }
+
   // Add security headers
   const response = NextResponse.next();
   response.headers.set('X-Content-Type-Options', 'nosniff');
