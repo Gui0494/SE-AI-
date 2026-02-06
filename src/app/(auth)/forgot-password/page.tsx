@@ -1,17 +1,14 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, ArrowLeft } from 'lucide-react';
 
-export default function RegisterPage() {
-  const [name, setName] = useState('');
+export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,24 +16,47 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/auth/register', {
+      const res = await fetch('/api/auth/forgot-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
       });
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Registration failed');
+        throw new Error(data.error || 'Something went wrong');
       }
 
-      router.push('/verify-email');
+      setSubmitted(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setLoading(false);
     }
   };
+
+  if (submitted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-950 px-4">
+        <div className="w-full max-w-md text-center">
+          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-emerald-600 flex items-center justify-center mx-auto mb-6">
+            <Sparkles className="w-6 h-6 text-white" />
+          </div>
+          <h1 className="text-xl font-bold text-zinc-200 mb-2">Check your email</h1>
+          <p className="text-zinc-400 text-sm mb-6">
+            If an account exists with <span className="text-zinc-200">{email}</span>, we sent a password reset link.
+          </p>
+          <Link
+            href="/login"
+            className="inline-flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to sign in
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-zinc-950 px-4">
@@ -45,8 +65,8 @@ export default function RegisterPage() {
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-600 to-emerald-600 flex items-center justify-center mx-auto mb-4">
             <Sparkles className="w-6 h-6 text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-zinc-200">Create account</h1>
-          <p className="text-zinc-500 mt-1">Get started with SE AI</p>
+          <h1 className="text-2xl font-bold text-zinc-200">Forgot password?</h1>
+          <p className="text-zinc-500 mt-1">Enter your email and we&apos;ll send a reset link</p>
         </div>
 
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
@@ -56,20 +76,6 @@ export default function RegisterPage() {
                 {error}
               </div>
             )}
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-zinc-400 mb-1">
-                Name
-              </label>
-              <input
-                id="name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-blue-600 transition-colors text-sm"
-                placeholder="Your name"
-                required
-              />
-            </div>
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-zinc-400 mb-1">
                 Email
@@ -84,35 +90,20 @@ export default function RegisterPage() {
                 required
               />
             </div>
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-zinc-400 mb-1">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-4 py-3 text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-blue-600 transition-colors text-sm"
-                placeholder="Min 8 characters"
-                minLength={8}
-                required
-              />
-            </div>
             <button
               type="submit"
               disabled={loading}
               className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 disabled:cursor-not-allowed text-white rounded-xl px-4 py-3 text-sm font-medium transition-colors"
             >
-              {loading ? 'Creating account...' : 'Create account'}
+              {loading ? 'Sending...' : 'Send reset link'}
             </button>
           </form>
         </div>
 
         <p className="text-center text-sm text-zinc-500 mt-4">
-          Already have an account?{' '}
-          <Link href="/login" className="text-blue-400 hover:text-blue-300">
-            Sign in
+          <Link href="/login" className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-1">
+            <ArrowLeft className="w-3 h-3" />
+            Back to sign in
           </Link>
         </p>
       </div>

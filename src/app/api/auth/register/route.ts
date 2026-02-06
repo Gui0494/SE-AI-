@@ -5,6 +5,8 @@ import { registerSchema } from '@/lib/validations';
 import { formatErrorResponse, ValidationError } from '@/lib/errors';
 import { checkAuthRateLimit } from '@/lib/rate-limit/auth';
 import { sanitizeShortText } from '@/lib/sanitize';
+import { createToken } from '@/lib/auth/tokens';
+import { sendEmail, buildVerificationEmail } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
@@ -64,8 +66,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Send verification email
+    const verifyToken = await createToken(user.email!, 'verification');
+    const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const verifyUrl = `${baseUrl}/verify-email?token=${verifyToken}`;
+    const { subject, html, text } = buildVerificationEmail(verifyUrl);
+    await sendEmail({ to: user.email!, subject, html, text });
+
     return NextResponse.json(
-      { message: 'Account created successfully' },
+      { message: 'Account created. Please check your email to verify your account.' },
       { status: 201 }
     );
   } catch (error) {
