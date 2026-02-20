@@ -1,0 +1,20 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "regions": ["gru1"],
+  "functions": {
+    "src/app/api/chat/[chatId]/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/chat/[chatId]/regenerate/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/chat/[chatId]/edit/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/webhooks/stripe/route.ts": {
+      "maxDuration": 30
+    }
+  },
+  "crons": []
+}
